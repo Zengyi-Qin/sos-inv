@@ -10,7 +10,6 @@ from model import SosNet
 import argparse
 import logging
 
-
 def print_loss(loss_history, epoch, lr, logger):
     msg = [
         f'epoch {epoch}',
@@ -49,8 +48,6 @@ def visualize(rf, sos, sos_pred, vis_dir, train_val, epoch):
         cv2.imwrite(save_name, img)
     
 
-
-
 def train(model, dataloader, optimizer, device, epoch, vis_dir, logger):
     model.train()
     loss_history = {
@@ -61,7 +58,6 @@ def train(model, dataloader, optimizer, device, epoch, vis_dir, logger):
     print(f'epoch {epoch + 1} starts')
     logger.info(f'epoch {epoch + 1} starts')
     for i, (rf, sos) in enumerate(dataloader):
-
         rf = rf.to(device)
         sos = sos.to(device)
 
@@ -152,10 +148,12 @@ def main(args):
         raise NotImplementedError
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batchsize, shuffle=True, num_workers=args.workers
+        train_dataset, batch_size=args.batchsize, shuffle=True, num_workers=args.workers,
+        persistent_workers=True
     )
     val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batchsize, shuffle=False, num_workers=args.workers
+        val_dataset, batch_size=args.batchsize, shuffle=False, num_workers=args.workers,
+        persistent_workers=True
     )
 
     log_path = os.path.join(args.ckp, 'logs.txt')
@@ -187,10 +185,10 @@ if __name__ == "__main__":
         "--batchsize", type=int, default=8
     )
     parser.add_argument(
-        "--workers", type=int, default=16, help="number of workers in dataloader"
+        "--workers", type=int, default=1, help="number of workers in dataloader"
     )
     parser.add_argument(
-        "--epochs", type=int, default=50, help="number of epochs in training"
+        "--epochs", type=int, default=150, help="number of epochs in training"
     )
     parser.add_argument("--data", default="./data", help="dataset root")
     parser.add_argument(

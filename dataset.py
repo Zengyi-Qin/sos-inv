@@ -4,7 +4,8 @@ import h5py
 import torch
 from torch.utils.data import Dataset
 import scipy.io
-
+import shelve
+import time
 
 class FocusedWaveDataset(Dataset):
 
@@ -26,41 +27,45 @@ class FocusedWaveDataset(Dataset):
         self.data_root = data_root
         self.file_list = os.listdir(os.path.join(data_root, 'sensor_data'))
         self.num_scan = num_scan
+        self.cache = {}
 
     def __len__(self):
         return len(self.file_list)
 
     def __getitem__(self, idx):
-        rf = scipy.io.loadmat(
-            os.path.join(self.data_root, 'sensor_data', self.file_list[idx]))
-        rf = rf['sensor_data']
-        n_scan, n_sensor, n_t = rf.shape
-
-        rf_input = np.zeros((self.max_n_scan, self.n_c, n_t), dtype=np.float32)
-        selected_scans = self.scan_select_seq[str(self.num_scan)]
-        for i, s in enumerate(selected_scans):
-            rf_this = rf[s]
-            paste_start = s - n_sensor // 2
-            if paste_start < 0:
-                crop_start = -paste_start
-                paste_start = 0
-            else:
-                crop_start = 0
+        # t1 = time.time()
+        load_path = os.path.join(self.data_root, 'sensor_data', self.file_list[idx])
+        if load_path not in self.cache:
+            rf = np.load(load_path)['sensor_data']
+            n_scan, n_sensor, n_t = rf.shape
+            rf_input = np.zeros((self.max_n_scan, self.n_c, n_t), dtype=np.float32)
+            selected_scans = self.scan_select_seq[str(self.num_scan)]
+            for i, s in enumerate(selected_scans):
+                rf_this = rf[s]
+                paste_start = s - n_sensor // 2
+                if paste_start < 0:
+                    crop_start = -paste_start
+                    paste_start = 0
+                else:
+                    crop_start = 0
             
-            paste_end = s + n_sensor - n_sensor // 2
-            if paste_end > self.n_c:
-                crop_end = n_sensor - (paste_end - self.n_c)
-                paste_end = self.n_c
-            else:
-                crop_end = n_sensor
+                paste_end = s + n_sensor - n_sensor // 2
+                if paste_end > self.n_c:
+                    crop_end = n_sensor - (paste_end - self.n_c)
+                    paste_end = self.n_c
+                else:
+                    crop_end = n_sensor
 
-            rf_input[i, paste_start:paste_end] = rf_this[crop_start:crop_end]
-
-        sos = scipy.io.loadmat(
+                rf_input[i, paste_start:paste_end] = rf_this[crop_start:crop_end]
+            self.cache[load_path] = rf_input
+        else:
+            rf_input = self.cache[load_path]
+        # t2 = time.time()
+        # print("{:.4f} | {}".format(t2-t1, len(self.cache)))
+        sos = np.load(
             os.path.join(self.data_root, 'c0', self.file_list[idx]))
         sos = sos['sos_map'][:, self.sos_margin:-self.sos_margin].T 
         sos = (sos[np.newaxis] - self.sos_mean) / self.sos_scale
-
         return rf_input, sos
 
 
@@ -84,25 +89,33 @@ class PlaneWaveDataset(Dataset):
         self.data_root = data_root
         self.file_list = os.listdir(os.path.join(data_root, 'plane_wave'))
         self.num_scan = num_scan
+        self.cache = {}
 
     def __len__(self):
         return len(self.file_list)
 
     def __getitem__(self, idx):
-        rf = scipy.io.loadmat(
-            os.path.join(self.data_root, 'plane_wave', self.file_list[idx]))
-        rf = rf['sensor_data_pw']
-        n_scan, n_sensor, n_t = rf.shape
+        load_path = os.path.join(self.data_root, 'plane_wave', self.file_list[idx])
+        if load_path not in self.cache:
+            data = np.load(
+                    os.path.join(self.data_root, 'plane_wave', self.file_list[idx]))
 
-        rf_input = np.zeros((self.max_n_scan, self.n_c, n_t), dtype=np.float32)
-        selected_scans = self.scan_select_seq[str(self.num_scan)]
-        for i, s in enumerate(selected_scans):
-            rf_this = rf[s]
-            crop_start = (n_sensor - self.n_c) // 2
-            crop_end = crop_start + self.n_c
-            rf_input[i] = rf_this[crop_start:crop_end]
+            rf = data['sensor_data_pw']
+            n_scan, n_sensor, n_t = rf.shape
 
-        sos = scipy.io.loadmat(
+            rf_input = np.zeros((self.max_n_scan, self.n_c, n_t), dtype=np.float32)
+            selected_scans = self.scan_select_seq[str(self.num_scan)]
+            for i, s in enumerate(selected_scans):
+                rf_this = rf[s]
+                crop_start = (n_sensor - self.n_c) // 2
+                crop_end = crop_start + self.n_c
+                rf_input[i] = rf_this[crop_start:crop_end]
+            self.cache[load_path] = rf_input
+
+        else:
+            rf_input = self.cache[load_path]
+
+        sos = np.load(
             os.path.join(self.data_root, 'c0', self.file_list[idx]))
         sos = sos['sos_map'][:, self.sos_margin:-self.sos_margin].T 
         sos = (sos[np.newaxis] - self.sos_mean) / self.sos_scale
@@ -121,14 +134,19 @@ class ScanLineDataset(Dataset):
     def __init__(self, data_root):
         self.data_root = data_root
         self.file_list = os.listdir(os.path.join(data_root, 'scan_line'))
+        self.cache = {}
 
     def __len__(self):
         return len(self.file_list)
 
     def __getitem__(self, idx):
-        rf = scipy.io.loadmat(
-            os.path.join(self.data_root, 'scan_line', self.file_list[idx]))
-        rf = rf['scan_lines']
+        load_path = os.path.join(self.data_root, 'scan_line', self.file_list[idx])
+        if load_path not in self.cache:
+            data = scipy.io.loadmat(
+                os.path.join(self.data_root, 'scan_line', self.file_list[idx]))
+            self.cache[load_path] = np.array(data['scan_lines'])
+            del data
+        rf = self.cache[load_path]
         n_scan, n_t = rf.shape
 
         rf_input = np.zeros((self.max_n_scan, self.n_c, n_t), dtype=np.float32)

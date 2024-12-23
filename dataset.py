@@ -76,7 +76,7 @@ class PlaneWaveDataset(Dataset):
         '3': [ 0, 5, 10],
         '5': [ 0, 2, 5, 8, 10],
         '7': [ 0, 2, 3, 5, 7, 8, 10],
-        '9': [ 0,  1, 2, 4, 5, 6, 8, 9, 20],
+        '9': [ 0,  1, 2, 4, 5, 6, 8, 9, 10],
         '11': [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     }
     n_c = 64
@@ -142,7 +142,7 @@ class ScanLineDataset(Dataset):
     def __getitem__(self, idx):
         load_path = os.path.join(self.data_root, 'scan_line', self.file_list[idx])
         if load_path not in self.cache:
-            data = scipy.io.loadmat(
+            data = np.load(
                 os.path.join(self.data_root, 'scan_line', self.file_list[idx]))
             self.cache[load_path] = np.array(data['scan_lines'])
             del data
@@ -152,7 +152,7 @@ class ScanLineDataset(Dataset):
         rf_input = np.zeros((self.max_n_scan, self.n_c, n_t), dtype=np.float32)
         rf_input[0] = rf
 
-        sos = scipy.io.loadmat(
+        sos = np.load(
             os.path.join(self.data_root, 'c0', self.file_list[idx]))
         sos = sos['sos_map'][:, self.sos_margin:-self.sos_margin].T 
         sos = (sos[np.newaxis] - self.sos_mean) / self.sos_scale
